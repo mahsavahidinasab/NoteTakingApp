@@ -1,45 +1,89 @@
-const express = require('express');
-
-const app = express();
-const mongoose = require('mongoose');
-
 require('dotenv').config();
 
+
+const dns = require("dns");
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+
+const express = require('express');
+
 const session = require('express-session');
+const mongoose = require('mongoose');
+const {MongoStore} = require('connect-mongo');
 const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const path = require('path');
+const methodOverride = require('method-override');
+const configurePassport = require('./config/passport');
 
+const app = express();
+const port = process.env.PORT || 3000;
 app.set('view engine', 'ejs');
-mongoose.connect(process.env.MONGO_URI);
-
+app.set('views', path.join(__dirname, 'views'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.urlencoded({ extended: true }));
+app.use(methodOverride('_method'));
 
-app.use(session({
+// =======================
+// Session configuration
+// =======================
+
+app.use(
+  session({
     secret: process.env.SESSION_SECRET,
     resave: false,
-    saveUninitialized: false
-}));
+    saveUninitialized: false,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGO_URI,
+    }),
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    },
+  })
+);
 
+// =======================
+// Passport configuration
+// =======================
+
+
+configurePassport(passport);
 app.use(passport.initialize());
 app.use(passport.session());
 
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: '/auth/google/callback'
-}, (accessToken, refresgToken, profile, done) => {
-    return done(null, profile);
-}));
+// make logged in users available to ejs
 
-passport.serializeUser((user, done) => done(null, user));
+app.use((req, res, next) => {
+  res.locals.currentUser = req.user;
+  next();
+});
 
-passport.deserializeUser((user, done) => done(null, user));
+// ===============
+// routes
+// ===============
 
+app.use(require('./routes/pageRoutes'));
+app.use(require('./routes/auth'));
+app.use(require('./routes/noteRoutes'))
 
+// ===================
+//  start server
+//  ==================
 
+async function startServer() {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('MongoDB connected successfully.');
 
-app.listen(process.env.PORT || 3000, () => {
-    console.log(`server is now running on port ${process.env.PORT}`)
-})
+    app.listen(port, () => {
+      console.log(`Server is running at http://localhost:${port}`);
+    });
+  } catch (error) {
+    console.error('MongoDB connection failed:', error.message);
+    process.exitCode = 1;
+  }
+}
+
+startServer();

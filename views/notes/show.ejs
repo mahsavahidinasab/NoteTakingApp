@@ -1,0 +1,17 @@
+<%- include('../partials/header') %>
+
+<div class="page-header">
+    <h1><%= note.title %></h1>
+    <div class="note-actions">
+        <a href="/notes/<%= note._id %>/edit" class="btn btn-small">Edit</a>
+        <form action="/notes/<%= note._id %>?_method=DELETE" method="POST" class="inline-form" onsubmit="return confirm('Delete this note?');">
+            <button type="submit" class="btn btn-small btn-danger">Delete</button>
+        </form>
+    </div>
+</div>
+
+<article class="note-content"><%= note.content %></article>
+
+<a href="/notes" class="back-link">&larr; Back to notes</a>
+
+<%- include('../partials/footer') %>

@@ -2,36 +2,42 @@ const Note = require('../models/Note');
 
 const getAllNotes = async (req, res) => {
     try {
-        const notes = await Note.find({
-            user: req.user._id
-        });
-        res.status(200).json(notes);
-    } catch(error) {
-        res.status(400).json({
-            message: 'could not get notes'
-        });
+        const notes = await Note.find({ user: req.user._id }).sort({ createdAt: -1 });
+        res.render('notes/index', { notes });
+    } catch (error) {
+        res.status(400).render('notes/index', { notes: [], error: 'Could not load notes' });
     }
 }
 
 const getNoteById = async (req, res) => {
     try {
-        const note = await Note.findById({
-            _id: req.params.id,
-            user: req.user._id
-        });
+        const note = await Note.findOne({ _id: req.params.id, user: req.user._id });
 
-        // if no note was found
-        if(!note){
-            return res.status(404).json({
-                message: "no book was found"
-            });
+        if (!note) {
+            return res.status(404).render('notes/notFound');
         }
-        // return the note
-        res.status(200).json(note);
-    } catch(error){
-        res.status(400).json({
-            message: "invalid note id"
-        });
+
+        res.render('notes/show', { note });
+    } catch (error) {
+        res.status(400).render('notes/notFound');
+    }
+}
+
+const newNoteForm = (req, res) => {
+    res.render('notes/new', { error: null, values: { title: '', content: '' } });
+}
+
+const editNoteForm = async (req, res) => {
+    try {
+        const note = await Note.findOne({ _id: req.params.id, user: req.user._id });
+
+        if (!note) {
+            return res.status(404).render('notes/notFound');
+        }
+
+        res.render('notes/edit', { note, error: null });
+    } catch (error) {
+        res.status(400).render('notes/notFound');
     }
 }
 
@@ -43,69 +49,57 @@ const createNote = async (req, res) => {
             user: req.user._id
         });
 
-        const savedNote = await newNote.save();
+        await newNote.save();
 
-        res.status(201).json(savedNote);
-    } catch(error) {
-        res.status(400).json({
-            message: 'could not create the note'
+        res.redirect('/notes');
+    } catch (error) {
+        res.status(400).render('notes/new', {
+            error: 'Could not create the note. Please fill in both a title and content.',
+            values: { title: req.body.title, content: req.body.content }
+        });
+    }
+}
+
+const updateNote = async (req, res) => {
+    try {
+        const updatedNote = await Note.findOneAndUpdate(
+            {
+                _id: req.params.id,
+                user: req.user._id
+            },
+            {
+                title: req.body.title,
+                content: req.body.content
+            },
+            {
+                new: true,
+                runValidators: true
+            });
+
+        if (!updatedNote) {
+            return res.status(404).render('notes/notFound');
+        }
+
+        res.redirect(`/notes/${updatedNote._id}`);
+    } catch (error) {
+        res.status(400).render('notes/edit', {
+            error: 'Could not update the note. Please fill in both a title and content.',
+            note: { _id: req.params.id, title: req.body.title, content: req.body.content }
         });
     }
 }
 
 const deleteNote = async (req, res) => {
     try {
-        const deleteNote = await Note.findOneAndDelete({
+        await Note.findOneAndDelete({
             _id: req.params.id,
             user: req.user._id
         });
 
-        if(!deleteNote) {
-            return res.status(404).json({
-                message: 'note not found'
-            })
-        }
-
-        res.status(200).json({
-            message: 'note deleted successfully',
-            note: deleteNote
-        });
-
-
-    } catch(error) {
-        res.status(400).json({
-            message: 'could not delete the note'
-        })
+        res.redirect('/notes');
+    } catch (error) {
+        res.redirect('/notes');
     }
 }
 
-const updateNote = async (res, req) => {
-    try {
-        const updateNote = await Note.findOneAndUpdate({
-            _id: req.params.id,
-            user: req.user._id
-            }, 
-            {
-                title: req.body.title,
-                content: req.body.content
-            }, 
-            {
-                new: true,
-                runValidators: true
-            });
-
-            // note doesn't exist or does not belong to this user
-            if(!updateNote) {
-                return status(404).json({
-                    message: 'note not found'
-                });
-            }
-            res.status(200).json(updateNote)
-        } catch(error){
-            res.status(400).json({
-                message: 'could not update the note'
-            });
-        }
-}
-
-module.exports = {getAllNotes, getNoteById, createNote, deleteNote, updateNote}
+module.exports = { getAllNotes, getNoteById, newNoteForm, editNoteForm, createNote, deleteNote, updateNote }
